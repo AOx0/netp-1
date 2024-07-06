@@ -33,7 +33,6 @@ impl<'pkt> IPv4<'pkt> {
         self.set_csum(self.calc_csum())
     }
 
-    #[inline]
     pub fn calc_csum(&self) -> u16 {
         etherparse::checksum::Sum16BitWords::new()
             .add_2bytes([(4 << 4) | self.ihl_u8(), (self.dscp() << 2) | self.ecn()])
@@ -60,6 +59,15 @@ impl<'pkt> IPv4<'pkt> {
             .ones_complement()
             .to_be()
     }
+
+    pub fn slice(&self) -> &[u8] {
+        &self.slice
+    }
+
+    pub fn slice_mut(&mut self) -> &mut [u8] {
+        &mut self.slice
+    }
+
     pub fn version(&self) -> u8 {
         self.slice[0] >> 4
     }
