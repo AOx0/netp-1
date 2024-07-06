@@ -1,3 +1,5 @@
+use crate::InetProtocol;
+
 pub struct IPv4<'pkt> {
     slice: &'pkt mut [u8],
     size: IPv4Size,
@@ -19,11 +21,50 @@ impl<'pkt> IPv4<'pkt> {
     pub const MIN_LEN: usize = 20;
     pub const MAX_LEN: usize = 60;
 
-    pub fn get_version(&self) -> u8 {
+    pub fn csum(&self) -> u16 {
+        u16::from_be_bytes(*self.slice[10..12].first_chunk::<2>().unwrap())
+    }
+
+    pub fn set_csum(&mut self, csum: u16) {
+        self.slice[10..12].copy_from_slice(&csum.to_be_bytes());
+    }
+
+    pub fn update_csum(&mut self) {
+        self.set_csum(self.calc_csum())
+    }
+
+    #[inline]
+    pub fn calc_csum(&self) -> u16 {
+        etherparse::checksum::Sum16BitWords::new()
+            .add_2bytes([(4 << 4) | self.ihl_u8(), (self.dscp() << 2) | self.ecn()])
+            .add_2bytes(self.total_length().to_be_bytes())
+            .add_2bytes(self.identification().to_be_bytes())
+            .add_2bytes({
+                let frag_off_be = self.fragment_offset();
+                let flags = {
+                    let mut result = 0;
+                    if self.dont_fragment() {
+                        result |= 64;
+                    }
+                    if self.more_fragments() {
+                        result |= 32;
+                    }
+                    result
+                };
+                [flags | (frag_off_be[0] & 0x1f), frag_off_be[1]]
+            })
+            .add_2bytes([self.ttl(), self.protocol_u8()])
+            .add_4bytes(*self.source())
+            .add_4bytes(*self.destination())
+            .add_slice(self.options())
+            .ones_complement()
+            .to_be()
+    }
+    pub fn version(&self) -> u8 {
         self.slice[0] >> 4
     }
 
-    pub fn get_source(&self) -> &[u8; 4] {
+    pub fn source(&self) -> &[u8; 4] {
         self.slice[12..16].first_chunk::<4>().unwrap()
     }
 
@@ -31,7 +72,7 @@ impl<'pkt> IPv4<'pkt> {
         self.slice[12..16].copy_from_slice(source)
     }
 
-    pub fn get_source_u32(&self) -> u32 {
+    pub fn source_u32(&self) -> u32 {
         u32::from_be_bytes(*self.slice[12..16].first_chunk::<4>().unwrap())
     }
 
@@ -39,7 +80,7 @@ impl<'pkt> IPv4<'pkt> {
         self.slice[12..16].copy_from_slice(&source.to_be_bytes())
     }
 
-    pub fn get_destination_u32(&self) -> u32 {
+    pub fn destination_u32(&self) -> u32 {
         u32::from_be_bytes(*self.slice[16..20].first_chunk::<4>().unwrap())
     }
 
@@ -47,7 +88,7 @@ impl<'pkt> IPv4<'pkt> {
         self.slice[16..20].copy_from_slice(&destination.to_be_bytes())
     }
 
-    pub fn get_destination(&self) -> &[u8; 4] {
+    pub fn destination(&self) -> &[u8; 4] {
         self.slice[16..20].first_chunk::<4>().unwrap()
     }
 
@@ -55,52 +96,75 @@ impl<'pkt> IPv4<'pkt> {
         self.slice[16..20].copy_from_slice(destination)
     }
 
-    pub fn get_dscp(&self) -> u8 {
+    pub fn ttl(&self) -> u8 {
+        self.slice[8]
+    }
+
+    pub fn options(&self) -> &[u8] {
+        &self.slice[Self::MIN_LEN..self.size as usize]
+    }
+
+    pub fn dscp(&self) -> u8 {
         self.slice[1] >> 2
     }
 
-    pub fn get_ecn(&self) -> u8 {
+    pub fn ecn(&self) -> u8 {
         self.slice[1] & 0b11
     }
 
-    pub fn get_total_length(&self) -> &[u8; 2] {
-        self.slice[2..4].first_chunk::<2>().unwrap()
+    pub fn total_length(&self) -> u16 {
+        u16::from_be_bytes(*self.slice[2..4].first_chunk::<2>().unwrap())
+    }
+
+    pub fn identification(&self) -> u16 {
+        u16::from_be_bytes(*self.slice[4..6].first_chunk::<2>().unwrap())
     }
 
     pub fn set_total_length(&mut self, value: &[u8; 2]) {
         self.slice[2..4].copy_from_slice(value)
     }
 
-    pub fn get_total_length_u16(&self) -> u16 {
+    pub fn total_length_u16(&self) -> u16 {
         u16::from_be_bytes(*self.slice[2..4].first_chunk::<2>().unwrap())
+    }
+
+    pub fn fragment_offset(&self) -> [u8; 2] {
+        let mut res = [0, 0];
+        res[0] = self.slice[6] & 0b11111;
+        res[1] = self.slice[7];
+        res
+    }
+
+    pub fn dont_fragment(&self) -> bool {
+        (self.slice[6] >> 6) & 0b01 == 1
+    }
+
+    pub fn more_fragments(&self) -> bool {
+        (self.slice[6] >> 5) & 0b001 == 1
     }
 
     pub fn set_total_length_u16(&mut self, value: u16) {
         self.slice[2..4].copy_from_slice(&value.to_be_bytes())
     }
 
-    pub fn get_protocol(&self) -> crate::InetProtocol {
-        crate::InetProtocol::from(self.slice[9])
+    pub fn protocol(&self) -> InetProtocol {
+        InetProtocol::from(self.slice[9])
+    }
+
+    pub fn protocol_u8(&self) -> u8 {
+        self.slice[9]
     }
 
     pub fn set_protocol(&mut self, protocol: crate::InetProtocol) {
         self.slice[9] = u8::from(protocol);
     }
 
-    pub fn set_ecn(&mut self, ecn: u8) {
-        self.slice[1] = 0b11 | self.slice[1];
-    }
-
-    pub fn set_dscp(&mut self, dscp: u8) {
-        self.slice[1] = (dscp << 2) | self.slice[1]
-    }
-
-    pub fn get_ihl_u8(&self) -> u8 {
+    pub fn ihl_u8(&self) -> u8 {
         self.slice[0] & 0xF
     }
 
-    pub fn calc_size(&self) -> Result<IPv4Size, IhlError> {
-        IPv4Size::try_from_ihl_u8(self.get_ihl_u8())
+    pub fn size(&self) -> IPv4Size {
+        self.size
     }
 
     pub fn new(slice: &'pkt mut [u8]) -> Result<(Self, &'pkt mut [u8]), Error> {
@@ -108,7 +172,7 @@ impl<'pkt> IPv4<'pkt> {
             return Err(Error::InvalidSize(slice.len()));
         }
 
-        let size = IPv4Size::try_from_ihl_u8(slice[0] & 0xF).map_err(|e| Error::InvalidIhl(e))?;
+        let size = IPv4Size::try_from_ihl_u8(slice[0] & 0xF).map_err(Error::InvalidIhl)?;
 
         if slice[0] >> 4 != 4 {
             return Err(Error::InvalidVersion(slice[0] >> 4));

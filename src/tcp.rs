@@ -32,11 +32,11 @@ impl<'pkt> Tcp<'pkt> {
 }
 
 impl Tcp<'_> {
-    pub fn get_source(&self) -> u16 {
+    pub fn source(&self) -> u16 {
         u16::from_be_bytes(*self.slice[0..2].first_chunk::<2>().unwrap())
     }
 
-    pub fn get_destination(&self) -> u16 {
+    pub fn destination(&self) -> u16 {
         u16::from_be_bytes(*self.slice[2..4].first_chunk::<2>().unwrap())
     }
 
@@ -48,7 +48,7 @@ impl Tcp<'_> {
         self.slice[2..4].copy_from_slice(&port.to_be_bytes())
     }
 
-    pub fn get_sequence_num(&mut self) -> u32 {
+    pub fn sequence_num(&mut self) -> u32 {
         u32::from_be_bytes(*self.slice[4..8].first_chunk::<4>().unwrap())
     }
 

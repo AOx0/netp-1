@@ -82,19 +82,19 @@ impl<'pkt> Ethernet<'pkt> {
     pub const MIN_LEN: usize = 14;
     pub const MAX_LEN: usize = 18;
 
-    pub fn get_ethertype(&'pkt self) -> EtherType {
+    pub fn ethertype(&'pkt self) -> EtherType {
         EtherType::from(*self.slice[12..16].first_chunk::<2>().unwrap())
     }
 
     pub fn set_destination(&mut self, new_dest: &[u8; 6]) {
-        self.slice[6..12].copy_from_slice(new_dest);
+        self.slice[0..6].copy_from_slice(new_dest);
     }
 
-    pub fn get_destination(&self) -> &[u8; 6] {
-        self.slice[6..12].try_into().unwrap()
+    pub fn destination(&self) -> &[u8; 6] {
+        self.slice[0..6].try_into().unwrap()
     }
 
-    pub fn get_size_usize(&self) -> usize {
+    pub fn size_usize(&self) -> usize {
         match self.size {
             EtherSize::S18 => 18,
             EtherSize::S16 => 16,
@@ -102,16 +102,16 @@ impl<'pkt> Ethernet<'pkt> {
         }
     }
 
-    pub fn get_size(&self) -> EtherSize {
+    pub fn size(&self) -> EtherSize {
         self.size
     }
 
     pub fn set_source(&mut self, new_dest: &[u8; 6]) {
-        self.slice[0..6].copy_from_slice(new_dest);
+        self.slice[6..12].copy_from_slice(new_dest);
     }
 
-    pub fn get_source(&self) -> &[u8; 6] {
-        self.slice[0..6].try_into().unwrap()
+    pub fn source(&self) -> &[u8; 6] {
+        self.slice[6..12].try_into().unwrap()
     }
 
     pub fn new_min(slice: &'pkt mut [u8]) -> (Self, &'pkt mut [u8]) {

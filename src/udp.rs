@@ -20,19 +20,19 @@ impl<'pkt> Udp<'pkt> {
 }
 
 impl Udp<'_> {
-    pub fn get_source(&self) -> u16 {
+    pub fn source(&self) -> u16 {
         u16::from_be_bytes(*self.slice[0..2].first_chunk::<2>().unwrap())
     }
 
-    pub fn get_destination(&self) -> u16 {
+    pub fn destination(&self) -> u16 {
         u16::from_be_bytes(*self.slice[2..4].first_chunk::<2>().unwrap())
     }
 
-    pub fn get_length(&self) -> &[u8; 2] {
-        self.slice[4..6].first_chunk::<2>().unwrap()
+    pub fn length(&self) -> u16 {
+        u16::from_be_bytes(*self.slice[4..6].first_chunk::<2>().unwrap())
     }
 
-    pub fn get_checksum(&self) -> &[u8; 2] {
+    pub fn checksum(&self) -> &[u8; 2] {
         self.slice[6..8].first_chunk::<2>().unwrap()
     }
 

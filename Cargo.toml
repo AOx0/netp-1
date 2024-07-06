@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 aya-ebpf-bindings = { version = "0.1.0", optional = true }
+etherparse = { version = "0.15.0", default-features = false }
 
 [features]
 default = []
