@@ -6,14 +6,14 @@ pub struct Ethernet<'pkt> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u16)]
 pub enum EtherType {
-    IPV4 = 0x0800,
-    IPV6 = 0x86dd,
-    ARP = 0x0806,
-    WAKE_ON_LAN = 0x0842,
-    VLAN_TAGGED_FRAME = 0x8100,
-    PROVIDER_BRIDGING = 0x88A8,
-    VLAN_DOUBLE_TAGGED_FRAME = 0x9100,
-    OTHER(u16),
+    IPv4 = 0x0800,
+    IPv6 = 0x86dd,
+    Arp = 0x0806,
+    WakeOnLan = 0x0842,
+    VlanTaggedFrame = 0x8100,
+    ProviderBridging = 0x88A8,
+    VlanDoubleTaggedFrame = 0x9100,
+    Other(u16),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -27,14 +27,14 @@ pub enum EtherSize {
 impl From<EtherType> for u16 {
     fn from(value: EtherType) -> Self {
         match value {
-            EtherType::IPV4 => 0x0800,
-            EtherType::IPV6 => 0x86dd,
-            EtherType::ARP => 0x0806,
-            EtherType::WAKE_ON_LAN => 0x0842,
-            EtherType::VLAN_TAGGED_FRAME => 0x8100,
-            EtherType::PROVIDER_BRIDGING => 0x88A8,
-            EtherType::VLAN_DOUBLE_TAGGED_FRAME => 0x9100,
-            EtherType::OTHER(v) => v,
+            EtherType::IPv4 => 0x0800,
+            EtherType::IPv6 => 0x86dd,
+            EtherType::Arp => 0x0806,
+            EtherType::WakeOnLan => 0x0842,
+            EtherType::VlanTaggedFrame => 0x8100,
+            EtherType::ProviderBridging => 0x88A8,
+            EtherType::VlanDoubleTaggedFrame => 0x9100,
+            EtherType::Other(v) => v,
         }
     }
 }
@@ -61,14 +61,14 @@ impl TryFrom<&[u8]> for EtherType {
 impl From<u16> for EtherType {
     fn from(value: u16) -> Self {
         match value {
-            0x0800 => Self::IPV4,
-            0x86dd => Self::IPV6,
-            0x0806 => Self::ARP,
-            0x0842 => Self::WAKE_ON_LAN,
-            0x8100 => Self::VLAN_TAGGED_FRAME,
-            0x88A8 => Self::PROVIDER_BRIDGING,
-            0x9100 => Self::VLAN_DOUBLE_TAGGED_FRAME,
-            x => Self::OTHER(x),
+            0x0800 => Self::IPv4,
+            0x86dd => Self::IPv6,
+            0x0806 => Self::Arp,
+            0x0842 => Self::WakeOnLan,
+            0x8100 => Self::VlanTaggedFrame,
+            0x88A8 => Self::ProviderBridging,
+            0x9100 => Self::VlanDoubleTaggedFrame,
+            x => Self::Other(x),
         }
     }
 }
@@ -131,9 +131,9 @@ impl<'pkt> Ethernet<'pkt> {
         }
 
         let size = match EtherType::from(*slice[12..14].first_chunk::<2>().unwrap()) {
-            EtherType::VLAN_DOUBLE_TAGGED_FRAME if slice.len() >= Self::MAX_LEN => EtherSize::S18,
-            EtherType::VLAN_TAGGED_FRAME if slice.len() >= Self::MIN_LEN + 2 => EtherSize::S16,
-            EtherType::OTHER(_) if slice.len() >= Self::MIN_LEN => EtherSize::S14,
+            EtherType::VlanDoubleTaggedFrame if slice.len() >= Self::MAX_LEN => EtherSize::S18,
+            EtherType::VlanTaggedFrame if slice.len() >= Self::MIN_LEN + 2 => EtherSize::S16,
+            EtherType::Other(_) if slice.len() >= Self::MIN_LEN => EtherSize::S14,
             _ if slice.len() >= Self::MIN_LEN => EtherSize::S14,
             x => return Err(Error::WrongSizeForType(x, slice.len())),
         };

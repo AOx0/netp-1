@@ -13,6 +13,29 @@ macro_rules! bounds {
     };
 }
 
+#[inline(always)]
+pub fn csum_fold_helper(mut csum: u64) -> u16 {
+    for _i in 0..4 {
+        if (csum >> 16) > 0 {
+            csum = (csum & 0xffff) + (csum >> 16);
+        }
+    }
+    !(csum as u16)
+}
+
+#[inline(always)]
+pub fn csum_diff<T: Copy>(mut old: T, mut new: T, seed: u32) -> u64 {
+    unsafe {
+        aya_ebpf_bindings::helpers::bpf_csum_diff(
+            (&mut old) as *mut T as *mut _,
+            size_of::<T>() as u32,
+            (&mut new) as *mut T as *mut _,
+            size_of::<T>() as u32,
+            seed,
+        ) as u64
+    }
+}
+
 pub trait XdpErr<T> {
     fn or_drop(self) -> Result<T, u32>
     where
