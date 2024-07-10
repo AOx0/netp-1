@@ -1,8 +1,29 @@
-use crate::InetProtocol;
+use super::ipnum::InetProtocol;
 
 pub struct IPv4<'pkt> {
     slice: &'pkt mut [u8],
     size: IPv4Size,
+}
+
+impl<'pkt> IPv4<'pkt> {
+    pub fn new(slice: &'pkt mut [u8]) -> Result<(Self, &'pkt mut [u8]), Error> {
+        if slice.len() < Self::MIN_LEN {
+            return Err(Error::InvalidSize(slice.len()));
+        }
+
+        let size = IPv4Size::try_from_ihl_u8(slice[0] & 0xF).map_err(Error::InvalidIhl)?;
+
+        if slice[0] >> 4 != 4 {
+            return Err(Error::InvalidVersion(slice[0] >> 4));
+        }
+
+        if slice.len() < size as usize {
+            return Err(Error::InvalidSizeForIhl(slice.len(), size));
+        }
+
+        let (slice, rem) = slice.split_at_mut(size as usize);
+        Ok((Self { slice, size }, rem))
+    }
 }
 
 #[derive(Debug)]
@@ -163,7 +184,7 @@ impl<'pkt> IPv4<'pkt> {
         self.slice[9]
     }
 
-    pub fn set_protocol(&mut self, protocol: crate::InetProtocol) {
+    pub fn set_protocol(&mut self, protocol: InetProtocol) {
         self.slice[9] = u8::from(protocol);
     }
 
@@ -173,25 +194,6 @@ impl<'pkt> IPv4<'pkt> {
 
     pub fn size(&self) -> IPv4Size {
         self.size
-    }
-
-    pub fn new(slice: &'pkt mut [u8]) -> Result<(Self, &'pkt mut [u8]), Error> {
-        if slice.len() < Self::MIN_LEN {
-            return Err(Error::InvalidSize(slice.len()));
-        }
-
-        let size = IPv4Size::try_from_ihl_u8(slice[0] & 0xF).map_err(Error::InvalidIhl)?;
-
-        if slice[0] >> 4 != 4 {
-            return Err(Error::InvalidVersion(slice[0] >> 4));
-        }
-
-        if slice.len() < size as usize {
-            return Err(Error::InvalidSizeForIhl(slice.len(), size));
-        }
-
-        let (slice, rem) = slice.split_at_mut(size as usize);
-        Ok((Self { slice, size }, rem))
     }
 }
 

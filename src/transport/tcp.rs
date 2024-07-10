@@ -1,5 +1,3 @@
-use crate::InetProtocol;
-
 pub struct Tcp<'pkt> {
     slice: &'pkt mut [u8],
     size: TcpSize,
@@ -36,90 +34,6 @@ impl<'pkt> Tcp<'pkt> {
 impl Tcp<'_> {
     pub fn size(&self) -> TcpSize {
         self.size
-    }
-
-    pub fn calc_checksum_ipv4_raw(
-        &self,
-        source_ip: [u8; 4],
-        destination_ip: [u8; 4],
-        payload: &[u8],
-    ) -> Result<u16, etherparse::err::ValueTooBigError<usize>> {
-        // check that the total length fits into the tcp length field
-        let max_payload = usize::from(u16::MAX) - self.size as usize;
-        if max_payload < payload.len() {
-            return Err(etherparse::err::ValueTooBigError {
-                actual: payload.len(),
-                max_allowed: max_payload,
-                value_type: etherparse::err::ValueType::TcpPayloadLengthIpv4,
-            });
-        }
-
-        // calculate the checksum
-        let tcp_len = self.size as usize as u16 + (payload.len() as u16);
-        Ok(self.calc_checksum_post_ip(
-            etherparse::checksum::Sum16BitWords::new()
-                .add_4bytes(source_ip)
-                .add_4bytes(destination_ip)
-                .add_2bytes([0, u8::from(InetProtocol::TCP)])
-                .add_2bytes(tcp_len.to_be_bytes()),
-            payload,
-        ))
-    }
-
-    fn calc_checksum_post_ip(
-        &self,
-        ip_pseudo_header_sum: etherparse::checksum::Sum16BitWords,
-        payload: &[u8],
-    ) -> u16 {
-        ip_pseudo_header_sum
-            .add_2bytes(self.source().to_be_bytes())
-            .add_2bytes(self.destination().to_be_bytes())
-            .add_4bytes(self.sequence_num().to_be_bytes())
-            .add_4bytes(self.ack_num().to_be_bytes())
-            .add_2bytes([
-                {
-                    let value = (self.data_offset() << 4) & 0xF0;
-                    if self.ns() {
-                        value | 1
-                    } else {
-                        value
-                    }
-                },
-                {
-                    let mut value = 0;
-                    if self.fin() {
-                        value |= 1;
-                    }
-                    if self.syn() {
-                        value |= 2;
-                    }
-                    if self.rst() {
-                        value |= 4;
-                    }
-                    if self.psh() {
-                        value |= 8;
-                    }
-                    if self.ack() {
-                        value |= 16;
-                    }
-                    if self.urg() {
-                        value |= 32;
-                    }
-                    if self.ece() {
-                        value |= 64;
-                    }
-                    if self.cwr() {
-                        value |= 128;
-                    }
-                    value
-                },
-            ])
-            .add_2bytes(self.window_size().to_be_bytes())
-            .add_2bytes(self.urgent_pointer().to_be_bytes())
-            .add_slice(self.options())
-            .add_slice(payload)
-            .ones_complement()
-            .to_be()
     }
 
     pub fn set_destination(&mut self, port: u16) {
