@@ -1,4 +1,4 @@
-pub struct Ethernet<P> {
+pub struct Ethernet<P = ()> {
     slice: P,
     size: EtherSize,
 }
@@ -87,9 +87,10 @@ impl<P: AsMut<[u8]> + AsRef<[u8]>> Ethernet<P> {
     pub fn set_source(&mut self, new_dest: &[u8; 6]) {
         self.slice.as_mut()[6..12].copy_from_slice(new_dest);
     }
-    
+
     pub fn set_ethertype(&mut self, ethertype: EtherType) {
-        self.slice.as_mut()[self.size as usize - 2..self.size as usize].copy_from_slice(&u16::from(ethertype).to_be_bytes());
+        self.slice.as_mut()[self.size as usize - 2..self.size as usize]
+            .copy_from_slice(&u16::from(ethertype).to_be_bytes());
     }
 
     pub fn slice_mut(&mut self) -> &mut [u8] {
@@ -128,7 +129,9 @@ impl<'pkt> Ethernet<&'pkt [u8]> {
 }
 
 impl<'pkt> Ethernet<&'pkt mut [u8]> {
-    pub fn new_mut(slice: &'pkt mut [u8]) -> Result<(Ethernet<&'pkt mut [u8]>, &'pkt mut [u8]), Error> {
+    pub fn new_mut(
+        slice: &'pkt mut [u8],
+    ) -> Result<(Ethernet<&'pkt mut [u8]>, &'pkt mut [u8]), Error> {
         if slice.len() < Self::MIN_LEN {
             return Err(Error::WrongSize(slice.len()));
         }
@@ -155,16 +158,22 @@ impl<'pkt> Ethernet<&'pkt mut [u8]> {
 impl<P: AsRef<[u8]>> Ethernet<P> {
     pub fn ethertype(&self) -> EtherType {
         match self.size {
-            EtherSize::S18 => EtherType::from(*self.slice.as_ref()[16..18].first_chunk::<2>().unwrap()),
-            EtherSize::S16 => EtherType::from(*self.slice.as_ref()[14..16].first_chunk::<2>().unwrap()),
-            EtherSize::S14 => EtherType::from(*self.slice.as_ref()[12..14].first_chunk::<2>().unwrap()),
+            EtherSize::S18 => {
+                EtherType::from(*self.slice.as_ref()[16..18].first_chunk::<2>().unwrap())
+            }
+            EtherSize::S16 => {
+                EtherType::from(*self.slice.as_ref()[14..16].first_chunk::<2>().unwrap())
+            }
+            EtherSize::S14 => {
+                EtherType::from(*self.slice.as_ref()[12..14].first_chunk::<2>().unwrap())
+            }
         }
     }
 
     pub fn destination(&self) -> &[u8; 6] {
         self.slice.as_ref()[0..6].try_into().unwrap()
     }
-    
+
     pub fn slice(&self) -> &[u8] {
         self.slice.as_ref()
     }
@@ -188,13 +197,13 @@ impl<P: AsRef<[u8]>> Ethernet<P> {
 
 #[cfg(test)]
 mod tests {
-    use crate::link::{Ethernet, EtherType};
     use crate::link::eth::EtherSize;
+    use crate::link::{EtherType, Ethernet};
 
     #[test]
     fn create_mut() {
         let mut packet = [
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x08, 0x00
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x08, 0x00,
         ];
         let (mut eth, rem) = Ethernet::new_mut(&mut packet).unwrap();
 
@@ -213,7 +222,7 @@ mod tests {
     #[test]
     fn create_ref() {
         let packet = [
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x08, 0x00
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x08, 0x00,
         ];
         let (eth, rem) = Ethernet::new(&packet).unwrap();
 
@@ -227,7 +236,8 @@ mod tests {
     #[test]
     fn vlan_tagged() {
         let packet = [
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x81, 0x00, 0x08, 0x00
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x81, 0x00,
+            0x08, 0x00,
         ];
         let (eth, rem) = Ethernet::new(&packet).unwrap();
 
@@ -241,7 +251,8 @@ mod tests {
     #[test]
     fn double_vlan_tagged() {
         let packet = [
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x91, 0x00, 0x81, 0x00, 0x08, 0x00
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x91, 0x00,
+            0x81, 0x00, 0x08, 0x00,
         ];
         let (eth, rem) = Ethernet::new(&packet).unwrap();
 
@@ -255,7 +266,8 @@ mod tests {
     #[test]
     fn change_ehertype() {
         let mut packet = [
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x81, 0x00, 0x08, 0x00
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x81, 0x00,
+            0x08, 0x00,
         ];
         let (mut eth, rem) = Ethernet::new_mut(&mut packet).unwrap();
 
@@ -264,7 +276,7 @@ mod tests {
         assert_eq!(eth.destination(), &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
         assert_eq!(eth.source(), &[0x01, 0x01, 0x01, 0x01, 0x01, 0x01]);
         assert_eq!(eth.ethertype(), EtherType::IPv4);
-        
+
         eth.set_ethertype(EtherType::Arp);
 
         assert_eq!(eth.size, EtherSize::S16);

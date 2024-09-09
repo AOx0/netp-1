@@ -1,12 +1,33 @@
 use super::ipnum::InetProtocol;
 
-pub struct IPv4<'pkt> {
-    slice: &'pkt mut [u8],
+pub struct IPv4<P = ()> {
+    slice: P,
     size: IPv4Size,
 }
 
-impl<'pkt> IPv4<'pkt> {
-    pub fn new(slice: &'pkt mut [u8]) -> Result<(Self, &'pkt mut [u8]), Error> {
+impl<'pkt> IPv4<&'pkt [u8]> {
+    pub fn new(slice: &'pkt [u8]) -> Result<(Self, &'pkt [u8]), Error> {
+        if slice.len() < Self::MIN_LEN {
+            return Err(Error::InvalidSize(slice.len()));
+        }
+
+        let size = IPv4Size::try_from_ihl_u8(slice[0] & 0xF).map_err(Error::InvalidIhl)?;
+
+        if slice[0] >> 4 != 4 {
+            return Err(Error::InvalidVersion(slice[0] >> 4));
+        }
+
+        if slice.len() < size as usize {
+            return Err(Error::InvalidSizeForIhl(slice.len(), size));
+        }
+
+        let (slice, rem) = slice.split_at(size as usize);
+        Ok((Self { slice, size }, rem))
+    }
+}
+
+impl<'pkt> IPv4<&'pkt mut [u8]> {
+    pub fn new_mut(slice: &'pkt mut [u8]) -> Result<(Self, &'pkt mut [u8]), Error> {
         if slice.len() < Self::MIN_LEN {
             return Err(Error::InvalidSize(slice.len()));
         }
@@ -38,20 +59,54 @@ pub enum Error {
     InvalidVersion(u8),
 }
 
-impl<'pkt> IPv4<'pkt> {
-    pub const MIN_LEN: usize = 20;
-    pub const MAX_LEN: usize = 60;
-
-    pub fn csum(&self) -> u16 {
-        u16::from_be_bytes(*self.slice[10..12].first_chunk::<2>().unwrap())
-    }
-
+impl<P: AsMut<[u8]> + AsRef<[u8]>> IPv4<P> {
     pub fn set_csum(&mut self, csum: u16) {
-        self.slice[10..12].copy_from_slice(&csum.to_be_bytes());
+        self.slice.as_mut()[10..12].copy_from_slice(&csum.to_be_bytes());
     }
 
     pub fn update_csum(&mut self) {
         self.set_csum(self.calc_csum())
+    }
+
+    pub fn slice_mut(&mut self) -> &mut [u8] {
+        self.slice.as_mut()
+    }
+
+    pub fn set_source(&mut self, source: &[u8; 4]) {
+        self.slice.as_mut()[12..16].copy_from_slice(source)
+    }
+
+    pub fn set_source_u32(&mut self, source: u32) {
+        self.slice.as_mut()[12..16].copy_from_slice(&source.to_be_bytes())
+    }
+
+    pub fn set_destination_u32(&mut self, destination: u32) {
+        self.slice.as_mut()[16..20].copy_from_slice(&destination.to_be_bytes())
+    }
+
+    pub fn set_destination(&mut self, destination: &[u8; 4]) {
+        self.slice.as_mut()[16..20].copy_from_slice(destination)
+    }
+
+    pub fn set_total_length(&mut self, value: &[u8; 2]) {
+        self.slice.as_mut()[2..4].copy_from_slice(value)
+    }
+
+    pub fn set_total_length_u16(&mut self, value: u16) {
+        self.slice.as_mut()[2..4].copy_from_slice(&value.to_be_bytes())
+    }
+
+    pub fn set_protocol(&mut self, protocol: InetProtocol) {
+        self.slice.as_mut()[9] = u8::from(protocol);
+    }
+}
+
+impl<P: AsRef<[u8]>> IPv4<P> {
+    pub const MIN_LEN: usize = 20;
+    pub const MAX_LEN: usize = 60;
+
+    pub fn csum(&self) -> u16 {
+        u16::from_be_bytes(*self.slice.as_ref()[10..12].first_chunk::<2>().unwrap())
     }
 
     pub fn calc_csum(&self) -> u16 {
@@ -82,114 +137,82 @@ impl<'pkt> IPv4<'pkt> {
     }
 
     pub fn slice(&self) -> &[u8] {
-        &self.slice
-    }
-
-    pub fn slice_mut(&mut self) -> &mut [u8] {
-        &mut self.slice
+        &self.slice.as_ref()
     }
 
     pub fn version(&self) -> u8 {
-        self.slice[0] >> 4
+        self.slice.as_ref()[0] >> 4
     }
 
     pub fn source(&self) -> &[u8; 4] {
-        self.slice[12..16].first_chunk::<4>().unwrap()
-    }
-
-    pub fn set_source(&mut self, source: &[u8; 4]) {
-        self.slice[12..16].copy_from_slice(source)
+        self.slice.as_ref()[12..16].first_chunk::<4>().unwrap()
     }
 
     pub fn source_u32(&self) -> u32 {
-        u32::from_be_bytes(*self.slice[12..16].first_chunk::<4>().unwrap())
-    }
-
-    pub fn set_source_u32(&mut self, source: u32) {
-        self.slice[12..16].copy_from_slice(&source.to_be_bytes())
+        u32::from_be_bytes(*self.slice.as_ref()[12..16].first_chunk::<4>().unwrap())
     }
 
     pub fn destination_u32(&self) -> u32 {
-        u32::from_be_bytes(*self.slice[16..20].first_chunk::<4>().unwrap())
-    }
-
-    pub fn set_destination_u32(&mut self, destination: u32) {
-        self.slice[16..20].copy_from_slice(&destination.to_be_bytes())
+        u32::from_be_bytes(*self.slice.as_ref()[16..20].first_chunk::<4>().unwrap())
     }
 
     pub fn destination(&self) -> &[u8; 4] {
-        self.slice[16..20].first_chunk::<4>().unwrap()
-    }
-
-    pub fn set_destination(&mut self, destination: &[u8; 4]) {
-        self.slice[16..20].copy_from_slice(destination)
+        self.slice.as_ref()[16..20].first_chunk::<4>().unwrap()
     }
 
     pub fn ttl(&self) -> u8 {
-        self.slice[8]
+        self.slice.as_ref()[8]
     }
 
     pub fn options(&self) -> &[u8] {
-        &self.slice[Self::MIN_LEN..self.size as usize]
+        &self.slice.as_ref()[Self::MIN_LEN..self.size as usize]
     }
 
     pub fn dscp(&self) -> u8 {
-        self.slice[1] >> 2
+        self.slice.as_ref()[1] >> 2
     }
 
     pub fn ecn(&self) -> u8 {
-        self.slice[1] & 0b11
+        self.slice.as_ref()[1] & 0b11
     }
 
     pub fn total_length(&self) -> u16 {
-        u16::from_be_bytes(*self.slice[2..4].first_chunk::<2>().unwrap())
+        u16::from_be_bytes(*self.slice.as_ref()[2..4].first_chunk::<2>().unwrap())
     }
 
     pub fn identification(&self) -> u16 {
-        u16::from_be_bytes(*self.slice[4..6].first_chunk::<2>().unwrap())
-    }
-
-    pub fn set_total_length(&mut self, value: &[u8; 2]) {
-        self.slice[2..4].copy_from_slice(value)
+        u16::from_be_bytes(*self.slice.as_ref()[4..6].first_chunk::<2>().unwrap())
     }
 
     pub fn total_length_u16(&self) -> u16 {
-        u16::from_be_bytes(*self.slice[2..4].first_chunk::<2>().unwrap())
+        u16::from_be_bytes(*self.slice.as_ref()[2..4].first_chunk::<2>().unwrap())
     }
 
     pub fn fragment_offset(&self) -> [u8; 2] {
         let mut res = [0, 0];
-        res[0] = self.slice[6] & 0b11111;
-        res[1] = self.slice[7];
+        res[0] = self.slice.as_ref()[6] & 0b11111;
+        res[1] = self.slice.as_ref()[7];
         res
     }
 
     pub fn dont_fragment(&self) -> bool {
-        (self.slice[6] >> 6) & 0b01 == 1
+        (self.slice.as_ref()[6] >> 6) & 0b01 == 1
     }
 
     pub fn more_fragments(&self) -> bool {
-        (self.slice[6] >> 5) & 0b001 == 1
-    }
-
-    pub fn set_total_length_u16(&mut self, value: u16) {
-        self.slice[2..4].copy_from_slice(&value.to_be_bytes())
+        (self.slice.as_ref()[6] >> 5) & 0b001 == 1
     }
 
     pub fn protocol(&self) -> InetProtocol {
-        InetProtocol::from(self.slice[9])
+        InetProtocol::from(self.slice.as_ref()[9])
     }
 
     pub fn protocol_u8(&self) -> u8 {
-        self.slice[9]
-    }
-
-    pub fn set_protocol(&mut self, protocol: InetProtocol) {
-        self.slice[9] = u8::from(protocol);
+        self.slice.as_ref()[9]
     }
 
     pub fn ihl_u8(&self) -> u8 {
-        self.slice[0] & 0xF
+        self.slice.as_ref()[0] & 0xF
     }
 
     pub fn size(&self) -> IPv4Size {
