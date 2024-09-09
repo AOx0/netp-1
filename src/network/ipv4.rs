@@ -7,7 +7,7 @@ pub struct IPv4<P = ()> {
 
 impl<'pkt> IPv4<&'pkt [u8]> {
     pub fn new(slice: &'pkt [u8]) -> Result<(Self, &'pkt [u8]), Error> {
-        if slice.len() < Self::MIN_LEN {
+        if slice.len() < IPv4::MIN_LEN {
             return Err(Error::InvalidSize(slice.len()));
         }
 
@@ -28,7 +28,7 @@ impl<'pkt> IPv4<&'pkt [u8]> {
 
 impl<'pkt> IPv4<&'pkt mut [u8]> {
     pub fn new_mut(slice: &'pkt mut [u8]) -> Result<(Self, &'pkt mut [u8]), Error> {
-        if slice.len() < Self::MIN_LEN {
+        if slice.len() < IPv4::MIN_LEN {
             return Err(Error::InvalidSize(slice.len()));
         }
 
@@ -101,10 +101,12 @@ impl<P: AsMut<[u8]> + AsRef<[u8]>> IPv4<P> {
     }
 }
 
-impl<P: AsRef<[u8]>> IPv4<P> {
+impl IPv4<()> {
     pub const MIN_LEN: usize = 20;
     pub const MAX_LEN: usize = 60;
+}
 
+impl<P: AsRef<[u8]>> IPv4<P> {
     pub fn csum(&self) -> u16 {
         u16::from_be_bytes(*self.slice.as_ref()[10..12].first_chunk::<2>().unwrap())
     }
@@ -165,7 +167,7 @@ impl<P: AsRef<[u8]>> IPv4<P> {
     }
 
     pub fn options(&self) -> &[u8] {
-        &self.slice.as_ref()[Self::MIN_LEN..self.size as usize]
+        &self.slice.as_ref()[IPv4::MIN_LEN..self.size as usize]
     }
 
     pub fn dscp(&self) -> u8 {

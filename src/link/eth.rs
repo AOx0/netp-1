@@ -98,28 +98,28 @@ impl<P: AsMut<[u8]> + AsRef<[u8]>> Ethernet<P> {
     }
 }
 
-impl<P> Ethernet<P> {
+impl Ethernet<()> {
     pub const MIN_LEN: usize = 14;
     pub const MAX_LEN: usize = 18;
 }
 
 impl<'pkt> Ethernet<&'pkt [u8]> {
     pub fn new(slice: &'pkt [u8]) -> Result<(Ethernet<&'pkt [u8]>, &'pkt [u8]), Error> {
-        if slice.len() < Self::MIN_LEN {
+        if slice.len() < Ethernet::MIN_LEN {
             return Err(Error::WrongSize(slice.len()));
         }
 
         let size = match EtherType::from(*slice[12..14].first_chunk::<2>().unwrap()) {
-            EtherType::VlanDoubleTaggedFrame if slice.len() >= Self::MAX_LEN => EtherSize::S18,
-            EtherType::VlanTaggedFrame if slice.len() >= Self::MIN_LEN + 2 => EtherSize::S16,
-            EtherType::Other(_) if slice.len() >= Self::MIN_LEN => EtherSize::S14,
-            _ if slice.len() >= Self::MIN_LEN => EtherSize::S14,
+            EtherType::VlanDoubleTaggedFrame if slice.len() >= Ethernet::MAX_LEN => EtherSize::S18,
+            EtherType::VlanTaggedFrame if slice.len() >= Ethernet::MIN_LEN + 2 => EtherSize::S16,
+            EtherType::Other(_) if slice.len() >= Ethernet::MIN_LEN => EtherSize::S14,
+            _ if slice.len() >= Ethernet::MIN_LEN => EtherSize::S14,
             x => return Err(Error::WrongSizeForType(x, slice.len())),
         };
 
         let (parsed, rem) = slice.split_at(size as usize);
         Ok((
-            Self {
+            Ethernet {
                 slice: parsed,
                 size,
             },
@@ -132,21 +132,21 @@ impl<'pkt> Ethernet<&'pkt mut [u8]> {
     pub fn new_mut(
         slice: &'pkt mut [u8],
     ) -> Result<(Ethernet<&'pkt mut [u8]>, &'pkt mut [u8]), Error> {
-        if slice.len() < Self::MIN_LEN {
+        if slice.len() < Ethernet::MIN_LEN {
             return Err(Error::WrongSize(slice.len()));
         }
 
         let size = match EtherType::from(*slice[12..14].first_chunk::<2>().unwrap()) {
-            EtherType::VlanDoubleTaggedFrame if slice.len() >= Self::MAX_LEN => EtherSize::S18,
-            EtherType::VlanTaggedFrame if slice.len() >= Self::MIN_LEN + 2 => EtherSize::S16,
-            EtherType::Other(_) if slice.len() >= Self::MIN_LEN => EtherSize::S14,
-            _ if slice.len() >= Self::MIN_LEN => EtherSize::S14,
+            EtherType::VlanDoubleTaggedFrame if slice.len() >= Ethernet::MAX_LEN => EtherSize::S18,
+            EtherType::VlanTaggedFrame if slice.len() >= Ethernet::MIN_LEN + 2 => EtherSize::S16,
+            EtherType::Other(_) if slice.len() >= Ethernet::MIN_LEN => EtherSize::S14,
+            _ if slice.len() >= Ethernet::MIN_LEN => EtherSize::S14,
             x => return Err(Error::WrongSizeForType(x, slice.len())),
         };
 
         let (parsed, rem) = slice.split_at_mut(size as usize);
         Ok((
-            Self {
+            Ethernet {
                 slice: parsed,
                 size,
             },
