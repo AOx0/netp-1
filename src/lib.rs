@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(feature = "schema"), no_std)]
 
 pub mod link;
 pub mod network;
