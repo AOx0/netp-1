@@ -1,5 +1,5 @@
 pub struct Tcp<'pkt> {
-    slice: &'pkt mut [u8],
+    slice: &'pkt [u8],
     size: TcpSize,
 }
 
@@ -13,19 +13,19 @@ impl<'pkt> Tcp<'pkt> {
     pub const MIN_LEN: usize = 20;
     pub const MAX_LEN: usize = 60;
 
-    pub fn new(slice: &'pkt mut [u8]) -> Result<(Self, &'pkt mut [u8]), Error> {
+    pub fn new(slice: &'pkt [u8]) -> Result<(Self, &'pkt [u8]), Error> {
         if slice.len() < Self::MIN_LEN {
             return Err(Error::InvalidSize(slice.len()));
         }
 
-        let size = TcpSize::try_from_data_offset_u8(slice[12] >> 4)
-            .map_err(|e| Error::InvalidDataOffset(e))?;
+        let size =
+            TcpSize::try_from_data_offset_u8(slice[12] >> 4).map_err(Error::InvalidDataOffset)?;
 
         if slice.len() < size as usize {
             return Err(Error::InvalidSizeForOffset(slice.len(), size));
         }
 
-        let (slice, rem) = slice.split_at_mut(size as usize);
+        let (slice, rem) = slice.split_at(size as usize);
 
         Ok((Self { slice, size }, rem))
     }
@@ -36,10 +36,6 @@ impl Tcp<'_> {
         self.size
     }
 
-    pub fn set_destination(&mut self, port: u16) {
-        self.slice[2..4].copy_from_slice(&port.to_be_bytes())
-    }
-
     pub fn destination(&self) -> u16 {
         u16::from_be_bytes(*self.slice[2..4].first_chunk::<2>().unwrap())
     }
@@ -48,72 +44,36 @@ impl Tcp<'_> {
         u16::from_be_bytes(*self.slice[0..2].first_chunk::<2>().unwrap())
     }
 
-    pub fn set_source(&mut self, port: u16) {
-        self.slice[0..2].copy_from_slice(&port.to_be_bytes())
-    }
-
     pub fn window_size(&self) -> u16 {
         u16::from_be_bytes(*self.slice[14..16].first_chunk::<2>().unwrap())
     }
 
-    pub fn set_window_size(&mut self, window_size: u16) {
-        self.slice[14..16].copy_from_slice(&window_size.to_be_bytes())
-    }
-
     pub fn slice(&self) -> &[u8] {
-        &self.slice
-    }
-
-    pub fn slice_mut(&mut self) -> &mut [u8] {
-        &mut self.slice
+        self.slice
     }
 
     pub fn csum(&self) -> u16 {
         u16::from_be_bytes(*self.slice[16..18].first_chunk::<2>().unwrap())
     }
 
-    pub fn set_csum(&mut self, csum: u16) {
-        self.slice[16..18].copy_from_slice(&csum.to_be_bytes())
-    }
-
     pub fn urgent_pointer(&self) -> u16 {
         u16::from_be_bytes(*self.slice[18..20].first_chunk::<2>().unwrap())
-    }
-
-    pub fn set_urgent_pointer(&mut self, urgent_pointer: u16) {
-        self.slice[18..20].copy_from_slice(&urgent_pointer.to_be_bytes())
     }
 
     pub fn sequence_num(&self) -> u32 {
         u32::from_be_bytes(*self.slice[4..8].first_chunk::<4>().unwrap())
     }
 
-    pub fn set_sequence_num(&mut self, num: u32) {
-        self.slice[4..8].copy_from_slice(&num.to_be_bytes())
-    }
-
     pub fn ack_num(&self) -> u32 {
         u32::from_be_bytes(*self.slice[8..12].first_chunk::<4>().unwrap())
-    }
-
-    pub fn set_ack_num(&mut self, ack: u32) {
-        self.slice[8..12].copy_from_slice(&ack.to_be_bytes())
     }
 
     pub fn data_offset(&self) -> u8 {
         self.slice[12] >> 4
     }
 
-    pub fn set_data_offset(&mut self, data_offset: u8) {
-        self.slice[12] = data_offset << 4
-    }
-
     pub fn flags(&self) -> u8 {
         self.slice[13]
-    }
-
-    pub fn set_flags(&mut self, flags: u8) {
-        self.slice[13] = flags
     }
 
     pub fn options(&self) -> &[u8] {
